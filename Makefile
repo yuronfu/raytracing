@@ -5,9 +5,11 @@ all: $(EXEC)
 CC ?= gcc
 CFLAGS = \
 	-std=gnu99 -Wall -O0 -g \
+	-mavx \
 	-D__forceinline="__attribute__((always_inline))"
 LDFLAGS = \
-	-lm
+	-lm \
+	-mavx
 
 ifeq ($(strip $(PROFILE)),1)
 PROF_FLAGS = -pg
