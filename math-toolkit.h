@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <assert.h>
+#include <immintrin.h>
 
 static inline __forceinline
 void normalize(double *v)
@@ -65,7 +66,12 @@ void cross_product(const double *v1, const double *v2, double *out)
 static inline __forceinline
 double dot_product(const double *v1, const double *v2)
 {
-    return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
+    register __m256d a = _mm256_set_pd(0,v1[2],v1[1],v1[0]);
+    register __m256d b = _mm256_set_pd(0,v2[2],v2[1],v2[0]);
+
+    a = _mm256_mul_pd(a,b);
+    return a[0]+a[1]+a[2];
+
 }
 
 static inline __forceinline
