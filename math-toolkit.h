@@ -71,7 +71,6 @@ double dot_product(const double *v1, const double *v2)
 
     a = _mm256_mul_pd(a,b);
     return a[0]+a[1]+a[2];
-
 }
 
 static inline __forceinline
@@ -85,6 +84,9 @@ void scalar_triple_product(const double *u, const double *v, const double *w,
 static inline __forceinline
 double scalar_triple(const double *u, const double *v, const double *w)
 {
+    _mm_prefetch(u,_MM_HINT_NTA);
+    _mm_prefetch(v,_MM_HINT_NTA);
+    _mm_prefetch(w,_MM_HINT_NTA);
     double tmp[3];
     cross_product(w, u, tmp);
     return dot_product(v, tmp);

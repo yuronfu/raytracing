@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <xmmintrin.h>
 
 #include "math-toolkit.h"
 #include "primitives.h"
@@ -22,6 +23,8 @@ static int raySphereIntersection(const point3 ray_e,
                                  const sphere *sph,
                                  intersection *ip, double *t1)
 {
+    _mm_prefetch(ray_e,_MM_HINT_NTA);
+    _mm_prefetch(ray_d,_MM_HINT_NTA);
     point3 l;
     subtract_vector(sph->center, ray_e, l);
     double s = dot_product(l, ray_d);
@@ -33,6 +36,7 @@ static int raySphereIntersection(const point3 ray_e,
     float m2 = l2 - s * s;
     if (m2 > r2)
         return 0;
+    _mm_prefetch(ip->normal,_MM_HINT_NTA);
     float q = sqrt(r2 - m2);
     *t1 = (l2 > r2) ? (s - q) : (s + q);
     /* p = e + t1 * d */
@@ -52,7 +56,12 @@ static int rayRectangularIntersection(const point3 ray_e,
                                       rectangular *rec,
                                       intersection *ip, double *t1)
 {
+    _mm_prefetch(ray_d,_MM_HINT_NTA);
+    _mm_prefetch(ray_e,_MM_HINT_NTA);
     point3 e01, e03, p;
+    _mm_prefetch(e01,_MM_HINT_NTA);
+    _mm_prefetch(e03,_MM_HINT_NTA);
+    _mm_prefetch(p,_MM_HINT_NTA);
     subtract_vector(rec->vertices[1], rec->vertices[0], e01);
     subtract_vector(rec->vertices[3], rec->vertices[0], e03);
 
@@ -69,6 +78,7 @@ static int rayRectangularIntersection(const point3 ray_e,
     double inv_det = 1.0 / det;
 
     point3 s;
+    _mm_prefetch(s,_MM_HINT_NTA);
     subtract_vector(ray_e, rec->vertices[0], s);
 
     double alpha = inv_det * dot_product(s, p);
@@ -77,6 +87,7 @@ static int rayRectangularIntersection(const point3 ray_e,
         return 0;
 
     point3 q;
+    _mm_prefetch(q,_MM_HINT_NTA);
     cross_product(s, e01, q);
 
     double beta = inv_det * dot_product(ray_d, q);
@@ -88,6 +99,8 @@ static int rayRectangularIntersection(const point3 ray_e,
     if (alpha + beta > 1.0f) {
         /* for the second triangle */
         point3 e23, e21;
+        _mm_prefetch(e23,_MM_HINT_NTA);
+        _mm_prefetch(e21,_MM_HINT_NTA);
         subtract_vector(rec->vertices[3], rec->vertices[2], e23);
         subtract_vector(rec->vertices[1], rec->vertices[2], e21);
 
@@ -116,7 +129,7 @@ static int rayRectangularIntersection(const point3 ray_e,
 
     if (*t1 < 1e-4)
         return 0;
-
+    _mm_prefetch(ip->normal,_MM_HINT_NTA);
     COPY_POINT3(ip->normal, rec->normal);
     if (dot_product(ip->normal, ray_d)>0.0)
         multiply_vector(ip->normal, -1, ip->normal);
@@ -163,7 +176,11 @@ static void compute_specular_diffuse(double *diffuse,
                                      const point3 d, const point3 l,
                                      const point3 n, double phong_pow)
 {
+    _mm_prefetch(n,_MM_HINT_NTA);
     point3 d_copy, l_copy, middle, r;
+    _mm_prefetch(r,_MM_HINT_NTA);
+    _mm_prefetch(d_copy,_MM_HINT_NTA);
+    _mm_prefetch(l_copy,_MM_HINT_NTA);
 
     /* Calculate vector to eye V */
     COPY_POINT3(d_copy, d);
@@ -195,6 +212,9 @@ static void compute_specular_diffuse(double *diffuse,
  */
 static void reflection(point3 r, const point3 d, const point3 n)
 {
+    _mm_prefetch(n,_MM_HINT_NTA);
+    _mm_prefetch(d,_MM_HINT_NTA);
+    _mm_prefetch(r,_MM_HINT_NTA);
     /* r = d - 2(d . n)n */
     multiply_vector(n, -2.0 * dot_product(d, n), r);
     add_vector(r, d, r);
@@ -204,6 +224,8 @@ static void reflection(point3 r, const point3 d, const point3 n)
 static void refraction(point3 t, const point3 I, const point3 N,
                        double n1, double n2)
 {
+    _mm_prefetch(N,_MM_HINT_NTA);
+    _mm_prefetch(I,_MM_HINT_NTA);
     double eta = n1 / n2;
     double dot_NI = dot_product(N,I);
     double k = 1.0 - eta * eta * (1.0 - dot_NI * dot_NI);
@@ -228,6 +250,7 @@ static void refraction(point3 t, const point3 I, const point3 N,
 static double fresnel(const point3 r, const point3 l,
                       const point3 normal, double n1, double n2)
 {
+    _mm_prefetch(normal,_MM_HINT_NTA);
     /* TIR */
     if (length(l) < 0.99)
         return 1.0;
@@ -292,6 +315,10 @@ static void rayConstruction(point3 d, const point3 u, const point3 v,
                             const viewpoint *view, unsigned int width,
                             unsigned int height)
 {
+    _mm_prefetch(d,_MM_HINT_NTA);
+    _mm_prefetch(u,_MM_HINT_NTA);
+    _mm_prefetch(v,_MM_HINT_NTA);
+    _mm_prefetch(w,_MM_HINT_NTA);
     double xmin = -0.0175;
     double ymin = -0.0175;
     double xmax =  0.0175;
