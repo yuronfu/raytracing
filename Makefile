@@ -43,4 +43,4 @@ use-models.h: models.inc Makefile
 
 clean:
 	$(RM) $(EXEC) $(OBJS) use-models.h \
-		out.ppm gmon.out
+		out.ppm gmon.out output.txt
