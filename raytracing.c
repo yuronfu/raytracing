@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <xmmintrin.h>
+#include <pthread.h>
 
 #include "math-toolkit.h"
 #include "primitives.h"
 #include "raytracing.h"
 #include "idx_stack.h"
+#include "parallel_compute.h"
 
 #define MAX_REFLECTION_BOUNCES	3
 #define MAX_DISTANCE 1000000000000.0
@@ -23,8 +24,6 @@ static int raySphereIntersection(const point3 ray_e,
                                  const sphere *sph,
                                  intersection *ip, double *t1)
 {
-    _mm_prefetch(ray_e,_MM_HINT_NTA);
-    _mm_prefetch(ray_d,_MM_HINT_NTA);
     point3 l;
     subtract_vector(sph->center, ray_e, l);
     double s = dot_product(l, ray_d);
@@ -36,7 +35,6 @@ static int raySphereIntersection(const point3 ray_e,
     float m2 = l2 - s * s;
     if (m2 > r2)
         return 0;
-    _mm_prefetch(ip->normal,_MM_HINT_NTA);
     float q = sqrt(r2 - m2);
     *t1 = (l2 > r2) ? (s - q) : (s + q);
     /* p = e + t1 * d */
@@ -56,12 +54,7 @@ static int rayRectangularIntersection(const point3 ray_e,
                                       rectangular *rec,
                                       intersection *ip, double *t1)
 {
-    _mm_prefetch(ray_d,_MM_HINT_NTA);
-    _mm_prefetch(ray_e,_MM_HINT_NTA);
     point3 e01, e03, p;
-    _mm_prefetch(e01,_MM_HINT_NTA);
-    _mm_prefetch(e03,_MM_HINT_NTA);
-    _mm_prefetch(p,_MM_HINT_NTA);
     subtract_vector(rec->vertices[1], rec->vertices[0], e01);
     subtract_vector(rec->vertices[3], rec->vertices[0], e03);
 
@@ -78,7 +71,6 @@ static int rayRectangularIntersection(const point3 ray_e,
     double inv_det = 1.0 / det;
 
     point3 s;
-    _mm_prefetch(s,_MM_HINT_NTA);
     subtract_vector(ray_e, rec->vertices[0], s);
 
     double alpha = inv_det * dot_product(s, p);
@@ -87,7 +79,6 @@ static int rayRectangularIntersection(const point3 ray_e,
         return 0;
 
     point3 q;
-    _mm_prefetch(q,_MM_HINT_NTA);
     cross_product(s, e01, q);
 
     double beta = inv_det * dot_product(ray_d, q);
@@ -99,8 +90,6 @@ static int rayRectangularIntersection(const point3 ray_e,
     if (alpha + beta > 1.0f) {
         /* for the second triangle */
         point3 e23, e21;
-        _mm_prefetch(e23,_MM_HINT_NTA);
-        _mm_prefetch(e21,_MM_HINT_NTA);
         subtract_vector(rec->vertices[3], rec->vertices[2], e23);
         subtract_vector(rec->vertices[1], rec->vertices[2], e21);
 
@@ -129,7 +118,7 @@ static int rayRectangularIntersection(const point3 ray_e,
 
     if (*t1 < 1e-4)
         return 0;
-    _mm_prefetch(ip->normal,_MM_HINT_NTA);
+
     COPY_POINT3(ip->normal, rec->normal);
     if (dot_product(ip->normal, ray_d)>0.0)
         multiply_vector(ip->normal, -1, ip->normal);
@@ -176,11 +165,7 @@ static void compute_specular_diffuse(double *diffuse,
                                      const point3 d, const point3 l,
                                      const point3 n, double phong_pow)
 {
-    _mm_prefetch(n,_MM_HINT_NTA);
     point3 d_copy, l_copy, middle, r;
-    _mm_prefetch(r,_MM_HINT_NTA);
-    _mm_prefetch(d_copy,_MM_HINT_NTA);
-    _mm_prefetch(l_copy,_MM_HINT_NTA);
 
     /* Calculate vector to eye V */
     COPY_POINT3(d_copy, d);
@@ -212,9 +197,6 @@ static void compute_specular_diffuse(double *diffuse,
  */
 static void reflection(point3 r, const point3 d, const point3 n)
 {
-    _mm_prefetch(n,_MM_HINT_NTA);
-    _mm_prefetch(d,_MM_HINT_NTA);
-    _mm_prefetch(r,_MM_HINT_NTA);
     /* r = d - 2(d . n)n */
     multiply_vector(n, -2.0 * dot_product(d, n), r);
     add_vector(r, d, r);
@@ -224,8 +206,6 @@ static void reflection(point3 r, const point3 d, const point3 n)
 static void refraction(point3 t, const point3 I, const point3 N,
                        double n1, double n2)
 {
-    _mm_prefetch(N,_MM_HINT_NTA);
-    _mm_prefetch(I,_MM_HINT_NTA);
     double eta = n1 / n2;
     double dot_NI = dot_product(N,I);
     double k = 1.0 - eta * eta * (1.0 - dot_NI * dot_NI);
@@ -250,7 +230,6 @@ static void refraction(point3 t, const point3 I, const point3 N,
 static double fresnel(const point3 r, const point3 l,
                       const point3 normal, double n1, double n2)
 {
-    _mm_prefetch(normal,_MM_HINT_NTA);
     /* TIR */
     if (length(l) < 0.99)
         return 1.0;
@@ -315,10 +294,6 @@ static void rayConstruction(point3 d, const point3 u, const point3 v,
                             const viewpoint *view, unsigned int width,
                             unsigned int height)
 {
-    _mm_prefetch(d,_MM_HINT_NTA);
-    _mm_prefetch(u,_MM_HINT_NTA);
-    _mm_prefetch(v,_MM_HINT_NTA);
-    _mm_prefetch(w,_MM_HINT_NTA);
     double xmin = -0.0175;
     double ymin = -0.0175;
     double xmax =  0.0175;
@@ -480,22 +455,20 @@ static unsigned int ray_color(const point3 e, double t,
 }
 
 /* @param background_color this is not ambient light */
-void raytracing(uint8_t *pixels, color background_color,
-                rectangular_node rectangulars, sphere_node spheres,
-                light_node lights, const viewpoint *view,
-                int width, int height)
+void *raytracing(void *parg)
 {
+    thrd_arg *arg = (thrd_arg*) parg;
     point3 u, v, w, d;
     color object_color = { 0.0, 0.0, 0.0 };
 
     /* calculate u, v, w */
-    calculateBasisVectors(u, v, w, view);
+    calculateBasisVectors(u, v, w, arg->fixed->view);
 
     idx_stack stk;
 
     int factor = sqrt(SAMPLES);
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
+    for (int j = arg->start_height; j < arg->end_height; j++) {
+        for (int i = arg->start_width; i < arg->end_width; i++) {
             double r = 0, g = 0, b = 0;
             /* MSAA */
             for (int s = 0; s < SAMPLES; s++) {
@@ -503,23 +476,95 @@ void raytracing(uint8_t *pixels, color background_color,
                 rayConstruction(d, u, v, w,
                                 i * factor + s / factor,
                                 j * factor + s % factor,
-                                view,
-                                width * factor, height * factor);
-                if (ray_color(view->vrp, 0.0, d, &stk, rectangulars, spheres,
-                              lights, object_color,
+                                arg->fixed->view,
+                                arg->fixed->width * factor, arg->fixed->height * factor);
+                if (ray_color(arg->fixed->view->vrp, 0.0, d, &stk, arg->fixed->rectangulars, arg->fixed->spheres,
+                              arg->fixed->lights, object_color,
                               MAX_REFLECTION_BOUNCES)) {
                     r += object_color[0];
                     g += object_color[1];
                     b += object_color[2];
                 } else {
-                    r += background_color[0];
-                    g += background_color[1];
-                    b += background_color[2];
+                    r += arg->fixed->background_color[0];
+                    g += arg->fixed->background_color[1];
+                    b += arg->fixed->background_color[2];
                 }
-                pixels[((i + (j * width)) * 3) + 0] = r * 255 / SAMPLES;
-                pixels[((i + (j * width)) * 3) + 1] = g * 255 / SAMPLES;
-                pixels[((i + (j * width)) * 3) + 2] = b * 255 / SAMPLES;
+                arg->fixed->pixels[((i + (j * arg->fixed->width)) * 3) + 0] = r * 255 / SAMPLES;
+                arg->fixed->pixels[((i + (j * arg->fixed->width)) * 3) + 1] = g * 255 / SAMPLES;
+                arg->fixed->pixels[((i + (j * arg->fixed->width)) * 3) + 2] = b * 255 / SAMPLES;
             }
         }
     }
+    return NULL;
+}
+
+/*  parallel compute for raytracing*/
+void parallel_raytracing(uint8_t *pixels, color background_color,
+                rectangular_node rectangulars, sphere_node spheres,
+                light_node lights, const viewpoint *view,
+                int width, int height)
+{
+    pthread_t thrd[4];
+    fixed_arg *farg;
+    thrd_arg arg[4];
+
+    farg = malloc(sizeof(fixed_arg));
+    farg->pixels = pixels;
+    farg->background_color[0] = background_color[0];
+    farg->background_color[1] = background_color[1];
+    farg->background_color[2] = background_color[2];
+    farg->rectangulars = rectangulars;
+    farg->spheres = spheres;
+    farg->lights = lights;
+    farg->view = view;
+    farg->width = width;
+    farg->height = height;
+
+    for(int i = 0 ; i < 4 ; i++)
+        arg[i].fixed = farg;
+
+    arg[0].start_width = 0;
+    arg[0].start_height = 0;
+    arg[0].end_width = width/2;
+    arg[0].end_height = height/2;
+
+    arg[1].start_width = width/2;
+    arg[1].start_height = 0;
+    arg[1].end_width = width;
+    arg[1].end_height = height/2;
+
+    arg[2].start_width = 0;
+    arg[2].start_height = height/2;
+    arg[2].end_width = width/2;
+    arg[2].end_height = height;
+
+    arg[3].start_width = width/2;
+    arg[3].start_height = height/2;
+    arg[3].end_width = width;
+    arg[3].end_height = height;
+
+    if( pthread_create(thrd, NULL, raytracing, arg) ) {
+
+        printf("pthread create fail.");
+        exit(EXIT_FAILURE);
+    }
+    if( pthread_create(thrd+1, NULL, raytracing, arg+1) ) {
+        printf("pthread create fail.");
+        exit(EXIT_FAILURE);
+    }
+    if( pthread_create(thrd+2, NULL, raytracing, arg+2) ) {
+        printf("pthread create fail.");
+        exit(EXIT_FAILURE);
+    }
+    if( pthread_create(thrd+3, NULL, raytracing, arg+3) ) {
+        printf("pthread create fail.");
+        exit(EXIT_FAILURE);
+    }
+
+    pthread_join(thrd[0],NULL);
+    pthread_join(thrd[1],NULL);
+    pthread_join(thrd[2],NULL);
+    pthread_join(thrd[3],NULL);
+
+    free(farg);
 }

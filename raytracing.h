@@ -4,7 +4,8 @@
 #include "objects.h"
 #include <stdint.h>
 
-void raytracing(uint8_t *pixels, color background_color,
+void *raytracing(void *parg);
+void parallel_raytracing(uint8_t *pixels, color background_color,
                 rectangular_node rectangulars, sphere_node spheres,
                 light_node lights, const viewpoint *view,
                 int width, int height);
