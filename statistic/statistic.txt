@@ -1,0 +1,5 @@
+original 6.490278
+inline 3.706748
+loop-unrolling 2.590873
+SIMD 4.045737
+pthread 1.682653

@@ -1,0 +1,8 @@
+4-pthread 1.682653
+8-thread 1.673812
+16-thread 1.492473
+32-thread 1.344172
+64-thread 1.324639
+128-thread 1.294400
+256-thread 1.295089
+512-thread 1.295616

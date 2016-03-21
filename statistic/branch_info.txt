@@ -1,0 +1,14 @@
+branches			4781698769	2016578897	1115819304
+branch-misses	57463755		16142156		7659864
+
+#orig:
+#4,781,698,769      branches
+#57,463,755      branch-misses             #    1.20% of all branches        
+
+#force inline:
+#2,016,578,897      branches
+#16,142,156      branch-misses             #    0.80% of all branches
+
+#loop unrolling:
+#1,115,819,304      branches
+#7,659,864      branch-misses             #    0.69% of all branches
