@@ -2,6 +2,7 @@
 #define __RAY_PARALLEL_COMPUTE_h
 
 #include "primitives.h"
+#define THREAD_NUM 512
 
 typedef struct {
         uint8_t *pixels;

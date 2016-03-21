@@ -504,9 +504,10 @@ void parallel_raytracing(uint8_t *pixels, color background_color,
                 light_node lights, const viewpoint *view,
                 int width, int height)
 {
-    pthread_t thrd[4];
+    pthread_t thrd[THREAD_NUM];
     fixed_arg *farg;
-    thrd_arg arg[4];
+    thrd_arg arg[THREAD_NUM];
+    int dw = width/THREAD_NUM;
 
     farg = malloc(sizeof(fixed_arg));
     farg->pixels = pixels;
@@ -520,51 +521,21 @@ void parallel_raytracing(uint8_t *pixels, color background_color,
     farg->width = width;
     farg->height = height;
 
-    for(int i = 0 ; i < 4 ; i++)
+    for(int i = 0 ; i <  THREAD_NUM; i++) {
         arg[i].fixed = farg;
 
-    arg[0].start_width = 0;
-    arg[0].start_height = 0;
-    arg[0].end_width = width/2;
-    arg[0].end_height = height/2;
+        arg[i].start_width = i*dw;
+        arg[i].start_height = 0;
+        arg[i].end_width = arg[i].start_width + dw;
+        arg[i].end_height = height;
 
-    arg[1].start_width = width/2;
-    arg[1].start_height = 0;
-    arg[1].end_width = width;
-    arg[1].end_height = height/2;
-
-    arg[2].start_width = 0;
-    arg[2].start_height = height/2;
-    arg[2].end_width = width/2;
-    arg[2].end_height = height;
-
-    arg[3].start_width = width/2;
-    arg[3].start_height = height/2;
-    arg[3].end_width = width;
-    arg[3].end_height = height;
-
-    if( pthread_create(thrd, NULL, raytracing, arg) ) {
-
-        printf("pthread create fail.");
-        exit(EXIT_FAILURE);
-    }
-    if( pthread_create(thrd+1, NULL, raytracing, arg+1) ) {
-        printf("pthread create fail.");
-        exit(EXIT_FAILURE);
-    }
-    if( pthread_create(thrd+2, NULL, raytracing, arg+2) ) {
-        printf("pthread create fail.");
-        exit(EXIT_FAILURE);
-    }
-    if( pthread_create(thrd+3, NULL, raytracing, arg+3) ) {
-        printf("pthread create fail.");
-        exit(EXIT_FAILURE);
+        if( pthread_create(thrd+i, NULL, raytracing, arg+i) ) {
+            printf("pthread create fail.");
+            exit(EXIT_FAILURE);
+        }
     }
 
-    pthread_join(thrd[0],NULL);
-    pthread_join(thrd[1],NULL);
-    pthread_join(thrd[2],NULL);
-    pthread_join(thrd[3],NULL);
+    for(int i = 0 ; i <  THREAD_NUM; i++) pthread_join(thrd[i],NULL);
 
     free(farg);
 }
